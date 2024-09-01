@@ -1,10 +1,16 @@
 import csv
+import os
 from dataclasses import dataclass
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 from selenium import webdriver
-from selenium.common import TimeoutException
+from selenium.common import (
+    TimeoutException,
+    NoSuchElementException,
+    ElementNotInteractableException,
+    WebDriverException,
+)
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -64,10 +70,14 @@ def accept_cookies(driver: webdriver.Chrome) -> None:
             ec.presence_of_element_located((By.CLASS_NAME, "acceptCookies"))
         )
         cookie_button.click()
-    except TimeoutException:
-        print("Timeout waiting for cookies accept button.")
-    except Exception as e:
-        print("Cookies accept button not found:", e)
+    except (
+            TimeoutException,
+            NoSuchElementException,
+            ElementNotInteractableException
+    ) as e:
+        print(f"Error interacting with the cookie accept button: {e}")
+    except WebDriverException as e:
+        print(f"WebDriver exception occurred: {e}")
 
 
 def more_button(driver: webdriver.Chrome) -> bool:
@@ -105,14 +115,22 @@ def scrape_products(driver: webdriver.Chrome, url: str) -> list[Product]:
 
 
 def save_products_to_csv(
-    products: list[Product],
-    output_csv_path: str
+        products: list,
+        output_csv_path: str
 ) -> None:
-    with open(output_csv_path, "w", newline="") as csv_file:
+    file_exists = os.path.isfile(output_csv_path)
+    is_file_empty = (
+        os.stat(output_csv_path).st_size == 0 if file_exists else True
+    )
+
+    with open(output_csv_path, "a", newline="") as csv_file:
         writer = csv.writer(csv_file)
-        writer.writerow(
-            ["title", "description", "price", "rating", "num_of_reviews"]
-        )
+
+        if not file_exists or is_file_empty:
+            writer.writerow(
+                ["title", "description", "price", "rating", "num_of_reviews"]
+            )
+
         for product in products:
             writer.writerow(
                 [product.title, product.description, product.price,
